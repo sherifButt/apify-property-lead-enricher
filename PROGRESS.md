@@ -2,121 +2,6 @@
 
 ## To Do
 
-### Phase 1 — Repo Setup & Scaffolding
-
-    - due: 2026-03-22
-    - tags: [setup, scaffolding, prerequisite]
-    - priority: high
-    - workload: Easy
-    - steps:
-      - [ ] Initialise repo with `apify-cli` (`apify create apify-property-lead-enricher --template typescript`)
-      - [ ] Set up TypeScript config (`tsconfig.json`)
-      - [ ] Install dependencies (`apify`, `crawlee`, `playwright`, `cheerio`)
-      - [ ] Create `src/types.ts` with `LeadRecord` interface
-      - [ ] Create `INPUT_SCHEMA.json`
-      - [ ] Create `Dockerfile` using Apify’s Node.js base image
-      - [ ] Configure `apify.json` metadata
-      - [ ] Add `.gitignore` (`node_modules`, `.env`, `apify_storage`)
-      
-      ```md
-      Run `apify create` first — it scaffolds the Dockerfile and apify.json automatically.
-      Only customise after the base scaffold is in place.
-      ```
-
-### Phase 2 — Companies House Module
-
-    - due: 2026-03-24
-    - tags: [api, companies-house, seed-source]
-    - priority: high
-    - workload: Easy
-    - steps:
-      - [ ] Get Companies House API key from developer.company-information.service.gov.uk
-      - [ ] Build `companiesHouse.ts` — company search by name/postcode (`GET /search/companies`)
-      - [ ] Build officers lookup — director names + appointment dates (`GET /company/{id}/officers`)
-      - [ ] Filter results by property SIC codes: 68100, 68209, 68320, 41100
-      - [ ] Unit test with sample Cardiff postcodes
-      
-      ```md
-      This is the seed source — every other module depends on its output.
-      Build and validate this fully before moving to Phase 3.
-      ```
-
-### Phase 3 — Land Registry Module
-
-    - due: 2026-03-26
-    - tags: [api, land-registry, portfolio-value]
-    - priority: high
-    - workload: Easy
-    - steps:
-      - [ ] Explore HMLR Price Paid Data API at landregistry.data.gov.uk
-      - [ ] Build `landRegistry.ts` — lookup by company name
-      - [ ] Build `landRegistry.ts` — lookup by postcode
-      - [ ] Derive `totalTransactions` and `estimatedPortfolioValue` (sum of pricePaid)
-      - [ ] Unit test with known property investor company names
-      
-      ```md
-      No auth required. Uses JSON-LD / SPARQL endpoint.
-      High-value signal: transaction volume = investor activity level.
-      ```
-
-### Phase 4 — Rightmove / Zoopla Scraper
-
-    - due: 2026-03-29
-    - tags: [scraping, playwright, proxies, anti-blocking]
-    - priority: medium
-    - workload: Medium
-    - steps:
-      - [ ] Set up `PlaywrightCrawler` with Apify residential proxies
-      - [ ] Build `propertyListings.ts` — search by agent/landlord name from Companies House output
-      - [ ] Extract active listing count and property type distribution
-      - [ ] Add randomised delays between 2000–5000ms per request
-      - [ ] Cap at 3 pages per run to limit compute units
-      - [ ] Test anti-blocking with 10 sample runs
-      
-      ```md
-      Most expensive module in terms of compute units (Playwright = full browser).
-      Keep page depth shallow. Residential proxies are mandatory here.
-      ```
-
-### Phase 5 — LinkedIn Module
-
-    - due: 2026-04-01
-    - tags: [scraping, cheerio, proxies, linkedin]
-    - priority: medium
-    - workload: Medium
-    - steps:
-      - [ ] Set up `CheerioCrawler` with Apify residential proxies
-      - [ ] Build `linkedin.ts` — search by director name + “property” keyword (public pages only)
-      - [ ] Extract LinkedIn URL, current role, and current company
-      - [ ] Hard cap at 30 lookups per Actor run
-      - [ ] Enforce 3s minimum delay between requests
-      - [ ] Skip lookups where director name is fewer than 3 words (too common)
-      - [ ] Test rate limiting — confirm no blocks after 30 consecutive lookups
-      
-      ```md
-      Build this last. Most fragile module. Never login-scrape.
-      Public profile pages only. If blocks occur, reduce cap to 15/run.
-      ```
-
-### Phase 6 — Orchestrator & Merge
-
-    - due: 2026-04-03
-    - tags: [orchestrator, core, merge]
-    - priority: high
-    - workload: Medium
-    - steps:
-      - [ ] Build `main.ts` — wire all modules via `Promise.allSettled()`
-      - [ ] Build `merge.ts` — combine partial source records into unified `LeadRecord`
-      - [ ] Add `Actor.setStatusMessage()` at key checkpoints for Console visibility
-      - [ ] Add global retry handler with exponential backoff for all HTTP requests
-      - [ ] Add deduplication via Apify Key-Value Store (check `registrationNumber` before re-enriching)
-      - [ ] End-to-end test run with real postcode input
-      
-      ```md
-      Use Promise.allSettled() not Promise.all() — a failing source must never crash the full run.
-      Dedup key is registrationNumber (unique, stable, from first source).
-      ```
-
 ### Phase 7 — Storage & Integration
 
 - due: 2026-04-05
@@ -154,13 +39,57 @@
 
 ## In Progress
 
-*(Nothing in progress yet — starting from Phase 1.)*
+*(Nothing in progress — Phases 7–8 are next.)*
 
 -----
 
 ## Done
 
-*(No phases complete yet.)*
+### Phase 1 — Repo Setup & Scaffolding ✅
+
+- `package.json` with apify, crawlee, playwright, cheerio, uuid
+- `tsconfig.json` extending `@apify/tsconfig`
+- `src/types.ts` — all interfaces (`LeadRecord`, `CompanyRecord`, `OfficerRecord`, `LandRegistryRecord`, `PropertyListing`, `LinkedInRecord`, `ActorInput`)
+- `INPUT_SCHEMA.json` — searchQuery, searchType, enrichSources, maxResults, proxyConfiguration
+- `Dockerfile` — Apify Playwright Chrome base image
+- `apify.json` — Actor metadata
+- `.gitignore` — node_modules, dist, apify_storage, .env
+
+### Phase 2 — Companies House Module ✅
+
+- `src/companiesHouse.ts` — company search via `/search/companies`, officers via `/company/{id}/officers`
+- Filters by property SIC codes (68100, 68209, 68320, 41100)
+- Exponential backoff retry on 429/failure (up to 3 retries)
+- Basic auth via `COMPANIES_HOUSE_API_KEY` env var
+
+### Phase 3 — Land Registry Module ✅
+
+- `src/landRegistry.ts` — SPARQL queries against HMLR Price Paid Data endpoint
+- Lookup by postcode or company name
+- Derives `totalTransactions`, `estimatedPortfolioValue` (sum of pricePaid), `lastTransactionDate`
+- Retry with exponential backoff on 429/5xx
+
+### Phase 4 — Rightmove / Zoopla Scraper ✅
+
+- `src/propertyListings.ts` — PlaywrightCrawler with Apify residential proxies
+- Scrapes both Rightmove and Zoopla listing pages
+- Randomised delays (2–5s) between requests
+- Capped at 3 pages per crawl run
+
+### Phase 5 — LinkedIn Module ✅
+
+- `src/linkedin.ts` — CheerioCrawler with residential proxies
+- Google search → LinkedIn public profile scrape pipeline
+- Hard cap at 30 lookups per run, 3s minimum delay
+- Skips names with fewer than 3 words (too common)
+
+### Phase 6 — Orchestrator & Merge ✅
+
+- `src/main.ts` — wires all modules via `Promise.allSettled()`
+- `src/merge.ts` — combines partial records into unified `LeadRecord` with UUID
+- `Actor.setStatusMessage()` at key checkpoints
+- Deduplication via Apify Key-Value Store (keyed on `registrationNumber`)
+- Each enrichment source runs in parallel; failures are isolated
 
 -----
 
