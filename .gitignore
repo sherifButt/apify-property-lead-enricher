@@ -3,3 +3,4 @@ dist/
 apify_storage/
 .env
 *.js.map
+*.tsbuildinfo
